@@ -4,7 +4,7 @@ from dataclasses import dataclass, asdict
 @dataclass
 class TrainingConfig:
     num_epochs: int = 10
-    kl_weight: float = 1e-6
+    kl_weight: float = 1
     gan_weight: float = 0.0
     gan_loss_start: int = 0
     num_visualization: int = 1
