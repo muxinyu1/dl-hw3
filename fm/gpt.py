@@ -175,7 +175,7 @@ class GPT(nn.Module):
                         cfg: TrainingConfig,
                         ckpt: str = "./checkpoints/gpt2_pretrained.pt"):
         model = GPT(cfg)
-        pretrained_states = torch.load(ckpt, map_location="cpu")
+        pretrained_states = torch.load(ckpt)
         if "model_state_dict" in pretrained_states:
             pretrained_states = pretrained_states["model_state_dict"]
         model.load_state_dict(pretrained_states, strict=False)
