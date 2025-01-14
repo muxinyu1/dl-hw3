@@ -15,15 +15,13 @@ class VAE(nn.Module):
         self.encoder = Encoder(img_channels, 2 * z_channels, num_channels)
         self.decoder = Decoder(z_channels, img_channels, num_channels)
 
-    def forward(self, x):
-        mu, logvar = self.encoder(x).chunk(2, dim=1)
-        ############################ Your code here ############################
-        # TODO: implement the reparameterization trick to obtain latent z
-        ########################################################################
-        z = None
-        ########################################################################
-        x_recon = self.decoder(z)
-        return x_recon, mu, logvar
+    def forward(self, x):  
+        mu, logvar = self.encoder(x).chunk(2, dim=1)  
+        std = torch.exp(0.5 * logvar)  
+        eps = torch.randn_like(std)
+        z = mu + eps * std
+        x_recon = self.decoder(z)  
+        return x_recon, mu, logvar  
     
     def encode(self, x):
         mu, _ = self.encoder(x).chunk(2, dim=1)
