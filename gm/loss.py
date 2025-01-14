@@ -11,17 +11,25 @@ class ReconstructionLoss(nn.Module):
     def forward(self, x, x_recon):
         return F.mse_loss(x_recon, x)
 
-class GANLossD(nn.Module):
-    def forward(self, real, fake):
-        # Hinge loss for discriminator
-        loss_real = torch.mean(F.relu(1.0 - real))
-        loss_fake = torch.mean(F.relu(1.0 + fake))
-        loss = loss_real + loss_fake
-        return loss.mean()
 
-class GANLossG(nn.Module):
-    def forward(self, fake):
-        # Generator tries to maximize D(G(z))
-        loss = -torch.mean(fake)
-        return loss.mean()
+class GANLossD(nn.Module):  
+    def forward(self, real, fake):  
+        # 判别器损失 = 0.5 * (max(0, 1-D(x)) + max(0, 1+D(x̂)))  
+        # real: D(x) - 真实样本的判别器输出  
+        # fake: D(x̂) - 重构样本的判别器输出  
+        
+        loss_real = torch.mean(torch.clamp(1 - real, min=0))  # max(0, 1-D(x))  
+        loss_fake = torch.mean(torch.clamp(1 + fake, min=0))  # max(0, 1+D(x̂))  
+        
+        loss = 0.5 * (loss_real + loss_fake)  
+        return loss  
+
+
+class GANLossG(nn.Module):  
+    def forward(self, fake):  
+        # 生成器损失 = -D(x̂)  
+        # fake: D(x̂) - 重构样本的判别器输出  
+        
+        loss = -fake  # 直接取负  
+        return loss.mean()  
 
