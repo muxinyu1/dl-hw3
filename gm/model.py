@@ -17,9 +17,11 @@ class VAE(nn.Module):
 
     def forward(self, x):  
         mu, logvar = self.encoder(x).chunk(2, dim=1)  
-        std = torch.exp(0.5 * logvar)  
-        eps = torch.randn_like(std)
-        z = mu + eps * std
+        ############################ Your code here ############################  
+        # implement the reparameterization trick to obtain latent z  
+        eps = torch.randn_like(mu)  
+        z = mu + torch.exp(0.5 * logvar) * eps   
+        ########################################################################  
         x_recon = self.decoder(z)  
         return x_recon, mu, logvar  
     
