@@ -158,4 +158,14 @@ class GaussianDiffusion(nn.Module):
                 img = posterior_mean
         ########################################################################
         return img
+
+    def extract(self, a, t, x_shape):  
+        """  
+        Extract some coefficients at specified timesteps,  
+        then reshape to [batch_size, 1, 1, 1] for broadcasting purposes.  
+        """  
+        batch_size = t.shape[0]  
+        out = a.gather(-1, t.cpu())  
+        return out.reshape(batch_size, *((1,) * (len(x_shape) - 1))).to(t.device)  
+
     
