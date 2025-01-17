@@ -64,10 +64,20 @@ class GaussianDiffusion(nn.Module):
         )
 
     def q_sample(self, x_start, t, noise):
-        # Extract alpha_bar for timestep t
-        alpha_bar = self.extract(self.alphas_bar, t, x_start.shape)
-        # Calculate sqrt(alpha_bar)*x_0 + sqrt(1-alpha_bar)*ε
-        return torch.sqrt(alpha_bar) * x_start + torch.sqrt(1 - alpha_bar) * noise
+        """
+        Sample from q(x_t | x_0) using the reparameterization trick
+        """
+        ############################ Your code here ############################
+        # Use pre-computed values for sampling
+        sqrt_alphas_cumprod_t = self.extract(self.sqrt_alphas_cumprod, t, x_start.shape)
+        sqrt_one_minus_alphas_cumprod_t = self.extract(
+            self.sqrt_one_minus_alphas_cumprod, t, x_start.shape
+        )
+        
+        # Sample from q(x_t | x_0)
+        x_t = sqrt_alphas_cumprod_t * x_start + sqrt_one_minus_alphas_cumprod_t * noise
+        return x_t
+        ########################################################################
 
     def p_losses(self, denoise_fn, x_start, y, t):
         noise = torch.randn_like(x_start)
@@ -118,30 +128,34 @@ class GaussianDiffusion(nn.Module):
 
     @torch.no_grad()
     def sample(self, denoise_fn, shape, y):
+        """
+        Sample from the model using the reverse process
+        """
         b = shape[0]
-        # Start from x_T ~ N(0, I)
+        ############################ Your code here ############################
+        # Start from x_T ~ N(0, 1)
         img = torch.randn(shape, device=y.device)
         
-        # Iterative sampling from T to 1
-        for t in range(self.n_steps)[::-1]:
+        # Iteratively sample from p(x_{t-1} | x_t) for t = T,T-1,...,1
+        for t in reversed(range(0, self.num_timesteps)):
             t_batch = torch.full((b,), t, device=y.device, dtype=torch.long)
+            
             # Predict noise
             predicted_noise = denoise_fn(img, t_batch, y)
             
-            # Extract required values for current timestep
-            alpha = self.alphas[t]
-            alpha_bar = self.alphas_bar[t]
-            beta = self.betas[t]
+            # Calculate posterior mean
+            posterior_mean = (
+                self.extract(self.posterior_mean_coef1, t_batch, img.shape) * img -
+                self.extract(self.posterior_mean_coef2, t_batch, img.shape) * predicted_noise
+            )
             
+            # Add noise if not the final step
             if t > 0:
                 noise = torch.randn_like(img)
+                posterior_variance = self.extract(self.posterior_variance, t_batch, img.shape)
+                img = posterior_mean + torch.sqrt(posterior_variance) * noise
             else:
-                noise = 0
-                
-            # Calculate x_{t-1} using the reverse process formula
-            img = 1 / torch.sqrt(alpha) * (
-                img - (beta / torch.sqrt(1 - alpha_bar)) * predicted_noise
-            ) + torch.sqrt(beta) * noise
-            
+                img = posterior_mean
+        ########################################################################
         return img
-
+    
