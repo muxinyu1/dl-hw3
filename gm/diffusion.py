@@ -63,20 +63,12 @@ class GaussianDiffusion(nn.Module):
             ),
         )
 
-    def q_sample(self, x_start, t, noise):
-        ############################ Your code here ############################
-        # 使用extract获取对应时间步的sqrt_alphas_cumprod
-        sqrt_alphas_cumprod_t = extract(self.sqrt_alphas_cumprod, t, x_start.shape)
-        # 使用extract获取对应时间步的sqrt_one_minus_alphas_cumprod
-        sqrt_one_minus_alphas_cumprod_t = extract(
-            self.sqrt_one_minus_alphas_cumprod, t, x_start.shape
-        )
-        
-        # 实现 x_t = √ᾱ * x_0 + √(1-ᾱ) * ε
-        x_t = sqrt_alphas_cumprod_t * x_start + sqrt_one_minus_alphas_cumprod_t * noise
-        return x_t
-        ########################################################################
-
+    def q_sample(self, x_start, t, noise):  
+        return (  
+            extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +  
+            extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape)   
+            * noise  
+        )  
     def p_losses(self, denoise_fn, x_start, y, t):
         noise = torch.randn_like(x_start)
         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
@@ -124,34 +116,13 @@ class GaussianDiffusion(nn.Module):
         nonzero_mask = (1 - (t == 0).float()).reshape(b, *((1,) * (len(x.shape) - 1)))
         return model_mean + nonzero_mask * model_variance.sqrt() * noise
 
-    @torch.no_grad()
-    def sample(self, denoise_fn, shape, y):
-        b = shape[0]
-        ############################ Your code here ############################
-        # 从标准正态分布采样得到x_T
-        img = torch.randn(shape, device=y.device)
-        
-        # 从T到1逐步采样
-        for t in reversed(range(0, self.num_timesteps)):
-            # 创建时间步batch
-            t_batch = torch.full((b,), t, device=y.device, dtype=torch.long)
-            
-            # 使用去噪模型预测噪声
-            predicted_noise = denoise_fn(img, t_batch, y)
-            
-            # 计算后验均值
-            coef1 = extract(self.posterior_mean_coef1, t_batch, img.shape)
-            coef2 = extract(self.posterior_mean_coef2, t_batch, img.shape)
-            posterior_mean = coef1 * img - coef2 * predicted_noise
-            
-            # 除了最后一步外添加噪声
-            if t > 0:
-                noise = torch.randn_like(img)
-                posterior_variance = extract(self.posterior_variance, t_batch, img.shape)
-                img = posterior_mean + torch.sqrt(posterior_variance) * noise
-            else:
-                img = posterior_mean
-        ########################################################################
-        return img
+    def sample(self, denoise_fn, shape, y):  
+        b = shape[0]  
+        img = torch.randn(shape, device=y.device)  
+        for t in reversed(range(self.num_timesteps)):  
+            t_batch = torch.full((shape[0],), t, device=y.device,   
+                dtype=torch.long)  
+            img = self.p_sample(denoise_fn, img, y, t_batch)  
+        return img  
 
     
