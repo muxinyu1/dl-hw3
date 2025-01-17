@@ -64,17 +64,15 @@ class GaussianDiffusion(nn.Module):
         )
 
     def q_sample(self, x_start, t, noise):
-        """
-        Sample from q(x_t | x_0) using the reparameterization trick
-        """
         ############################ Your code here ############################
-        # Use pre-computed values for sampling
-        sqrt_alphas_cumprod_t = self.extract(self.sqrt_alphas_cumprod, t, x_start.shape)
-        sqrt_one_minus_alphas_cumprod_t = self.extract(
+        # 使用extract获取对应时间步的sqrt_alphas_cumprod
+        sqrt_alphas_cumprod_t = extract(self.sqrt_alphas_cumprod, t, x_start.shape)
+        # 使用extract获取对应时间步的sqrt_one_minus_alphas_cumprod
+        sqrt_one_minus_alphas_cumprod_t = extract(
             self.sqrt_one_minus_alphas_cumprod, t, x_start.shape
         )
         
-        # Sample from q(x_t | x_0)
+        # 实现 x_t = √ᾱ * x_0 + √(1-ᾱ) * ε
         x_t = sqrt_alphas_cumprod_t * x_start + sqrt_one_minus_alphas_cumprod_t * noise
         return x_t
         ########################################################################
@@ -128,44 +126,32 @@ class GaussianDiffusion(nn.Module):
 
     @torch.no_grad()
     def sample(self, denoise_fn, shape, y):
-        """
-        Sample from the model using the reverse process
-        """
         b = shape[0]
         ############################ Your code here ############################
-        # Start from x_T ~ N(0, 1)
+        # 从标准正态分布采样得到x_T
         img = torch.randn(shape, device=y.device)
         
-        # Iteratively sample from p(x_{t-1} | x_t) for t = T,T-1,...,1
+        # 从T到1逐步采样
         for t in reversed(range(0, self.num_timesteps)):
+            # 创建时间步batch
             t_batch = torch.full((b,), t, device=y.device, dtype=torch.long)
             
-            # Predict noise
+            # 使用去噪模型预测噪声
             predicted_noise = denoise_fn(img, t_batch, y)
             
-            # Calculate posterior mean
-            posterior_mean = (
-                self.extract(self.posterior_mean_coef1, t_batch, img.shape) * img -
-                self.extract(self.posterior_mean_coef2, t_batch, img.shape) * predicted_noise
-            )
+            # 计算后验均值
+            coef1 = extract(self.posterior_mean_coef1, t_batch, img.shape)
+            coef2 = extract(self.posterior_mean_coef2, t_batch, img.shape)
+            posterior_mean = coef1 * img - coef2 * predicted_noise
             
-            # Add noise if not the final step
+            # 除了最后一步外添加噪声
             if t > 0:
                 noise = torch.randn_like(img)
-                posterior_variance = self.extract(self.posterior_variance, t_batch, img.shape)
+                posterior_variance = extract(self.posterior_variance, t_batch, img.shape)
                 img = posterior_mean + torch.sqrt(posterior_variance) * noise
             else:
                 img = posterior_mean
         ########################################################################
         return img
-
-    def extract(self, a, t, x_shape):  
-        """  
-        Extract some coefficients at specified timesteps,  
-        then reshape to [batch_size, 1, 1, 1] for broadcasting purposes.  
-        """  
-        batch_size = t.shape[0]  
-        out = a.gather(-1, t.cpu())  
-        return out.reshape(batch_size, *((1,) * (len(x_shape) - 1))).to(t.device)  
 
     
