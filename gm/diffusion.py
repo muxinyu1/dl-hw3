@@ -64,13 +64,10 @@ class GaussianDiffusion(nn.Module):
         )
 
     def q_sample(self, x_start, t, noise):
-        ############################ Your code here ############################
-        # TODO: sample from q(x_t | x_0) with given x_0 and noise
-        # TODO: hint: use extract function
-        ########################################################################
-        return x_start
-        ########################################################################
-
+        # Extract alpha_bar for timestep t
+        alpha_bar = self.extract(self.alphas_bar, t, x_start.shape)
+        # Calculate sqrt(alpha_bar)*x_0 + sqrt(1-alpha_bar)*ε
+        return torch.sqrt(alpha_bar) * x_start + torch.sqrt(1 - alpha_bar) * noise
 
     def p_losses(self, denoise_fn, x_start, y, t):
         noise = torch.randn_like(x_start)
@@ -122,12 +119,29 @@ class GaussianDiffusion(nn.Module):
     @torch.no_grad()
     def sample(self, denoise_fn, shape, y):
         b = shape[0]
-        ############################ Your code here ############################
-        # TODO: sample from the model
-        # TODO: initially x_T = N(0, 1)
-        # TODO: iterative sampling from p(x_{t-1} | x_t) until t == 0
-        ########################################################################
+        # Start from x_T ~ N(0, I)
         img = torch.randn(shape, device=y.device)
-        ########################################################################
+        
+        # Iterative sampling from T to 1
+        for t in range(self.n_steps)[::-1]:
+            t_batch = torch.full((b,), t, device=y.device, dtype=torch.long)
+            # Predict noise
+            predicted_noise = denoise_fn(img, t_batch, y)
+            
+            # Extract required values for current timestep
+            alpha = self.alphas[t]
+            alpha_bar = self.alphas_bar[t]
+            beta = self.betas[t]
+            
+            if t > 0:
+                noise = torch.randn_like(img)
+            else:
+                noise = 0
+                
+            # Calculate x_{t-1} using the reverse process formula
+            img = 1 / torch.sqrt(alpha) * (
+                img - (beta / torch.sqrt(1 - alpha_bar)) * predicted_noise
+            ) + torch.sqrt(beta) * noise
+            
         return img
 
